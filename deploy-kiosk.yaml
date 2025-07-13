@@ -1,0 +1,85 @@
+---
+- name: Set up Grafana kiosk on Ubuntu
+  hosts: testovaci-klobasa
+  become: yes
+
+  vars:
+    kiosk_user: tv
+
+  tasks:
+    - name: Install packages
+      apt:
+        name:
+          - chromium-browser
+          - nginx
+          - unclutter
+          # original vi editor is bad
+          - vim
+        update_cache: yes
+        state: present
+
+    - name: Create systemd user service directory
+      file:
+        path: "/home/{{ kiosk_user }}/.config/systemd/user"
+        state: directory
+        owner: "{{ kiosk_user }}"
+        group: "{{ kiosk_user }}"
+        mode: '0755'
+
+    - name: autostart directory
+      file:
+        path: "/home/{{ kiosk_user }}/.config/autostart"
+        state: directory
+        owner: "{{ kiosk_user }}"
+        group: "{{ kiosk_user }}"
+        mode: '0755'
+
+    - name: copy grafana-kiosk file
+      copy:
+        src: config/grafana-kiosk.desktop
+        dest: "/home/{{ kiosk_user }}/.config/autostart/grafana-kiosk.desktop"
+        owner: "{{ kiosk_user }}"
+        group: "{{ kiosk_user }}"
+        mode: '0644'
+    - name: Create a link in ~/Desktop
+      file:
+        src: "/home/{{ kiosk_user }}/.config/autostart/grafana-kiosk.desktop"
+        dest: "/home/{{ kiosk_user }}/Desktop/grafana-kiosk.desktop"
+        state: link
+        owner: "{{ kiosk_user }}"
+        group: "{{ kiosk_user }}"
+
+    - name: Copy hide-cursor.service
+      copy:
+        src: config/hide-cursor.service
+        dest: "/home/{{ kiosk_user }}/.config/systemd/user/hide-cursor.service"
+        owner: "{{ kiosk_user }}"
+        group: "{{ kiosk_user }}"
+        mode: '0644'
+
+    - name: Start and enable hide-cursor.service
+      become_user: "{{ kiosk_user }}"
+      systemd:
+        name: hide-cursor.service
+        state: started
+        enabled: yes
+        scope: user
+
+    - name: autologin service
+      copy:
+        src: config/auto-login.conf
+        dest: "/etc/gdm3/custom.conf"
+        owner: "{{ kiosk_user }}"
+        group: "{{ kiosk_user }}"
+        mode: '0644'
+
+    - name: Configure screen settings
+      become_user: "{{ kiosk_user }}"
+      shell: |
+        gsettings set org.gnome.desktop.session idle-delay 0
+        gsettings set org.gnome.desktop.screensaver lock-enabled false
+        gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
+        gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
+
+    - name: Reboot
+      reboot:

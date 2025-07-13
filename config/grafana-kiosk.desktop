@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Grafana Kiosk
+Exec=chromium-browser --start-fullscreen --noerrdialogs google.com
